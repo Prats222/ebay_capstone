@@ -1,0 +1,8 @@
+Skipping candidate #1 (no keyword token in href/title/alt)
+Skipping candidate #2 (no keyword token in href/title/alt)
+Candidate #3: href='https://www.ebay.com/itm/357805994417?_skw=outdoor+toys&itmmeta=01KA13YGSJZJFM6AQG6RQBMBGT&hash=item534ee631b1:g:cVwAAeS' title='' alt='Outdoor Indoor Climbing Cargo Net for Kids, 12mm Thickness' added=True
+Candidate #4: href='https://www.ebay.com/itm/357806463828?_skw=outdoor+toys&itmmeta=01KA13YGSJQX9VKNKZX9061P0S&hash=item534eed5b54:g:MPkAAeS' title='' alt='Kids Climbing Cargo Net, Outdoor Obstacle Course Rope Ladder' added=True
+Candidate #5: href='https://www.ebay.com/itm/357800413435?_skw=outdoor+toys&itmmeta=01KA13YGSJNTAGDXYWKD7NHEB7&hash=item534e9108fb:g:JikAAeS' title='' alt='Kids Climbing Net, Outdoor Jungle Gym, Indoor Playground Net' added=True
+Total products successfully added to cart: 3
+✅ Successfully removed the last item from cart (heuristic).
+Saved final cart screenshot (after remove attempt) to: tests/final_cart_after_remove_20251114_173410.png
