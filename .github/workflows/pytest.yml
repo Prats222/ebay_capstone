@@ -1,0 +1,47 @@
+name: Run Pytest and Collect Reports
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create reports directories
+        run: |
+          mkdir -p reports/allure-results
+
+      - name: Run pytest (skip login tests)
+        run: |
+          pytest -v -k "not login" --maxfail=1 --disable-warnings \
+            --alluredir=reports/allure-results \
+            --html=reports/extent-report.html
+
+      - name: List reports
+        run: |
+          ls -la reports || true
+          ls -la reports/allure-results || true
+
+      - name: Upload test artifacts (Allure results + html)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-reports
+          path: |
+            reports/allure-results
+            reports/extent-report.html
