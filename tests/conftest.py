@@ -203,7 +203,7 @@ from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.edge.options import Options as EdgeOptions
 
-# webdriver-manager imports
+# local manager (used only outside CI)
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
 
@@ -215,6 +215,9 @@ def pytest_addoption(parser):
         help="Browser to run tests: chrome | firefox | edge",
     )
 
+def _is_ci():
+    return bool(os.getenv("CI") or os.getenv("GITHUB_ACTIONS"))
+
 @pytest.fixture(scope="function")
 def setup_driver(request):
     browser = request.config.getoption("--browser").lower()
@@ -222,8 +225,6 @@ def setup_driver(request):
     # ---------- CHROME ----------
     if browser == "chrome":
         options = ChromeOptions()
-
-        # Anti-detection / UX options you used previously
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option("useAutomationExtension", False)
@@ -233,29 +234,32 @@ def setup_driver(request):
             "Chrome/120.0.0.0 Safari/537.36"
         )
 
-        # LOCAL: if you want to reuse a local profile (for manual captcha), set env vars:
-        #   CHROME_USER_DATA -> e.g. C:\Users\prateek.mishra\AppData\Local\Google\Chrome\User Data
-        #   CHROME_PROFILE_DIR -> e.g. "Profile 1" or "ebay_profile"
-        # Only use profile when NOT in CI (so Actions doesn't try to mount local paths)
-        if not (os.getenv("CI") or os.getenv("GITHUB_ACTIONS")):
+        if _is_ci():
+            # CI: use system-installed chromium & chromedriver
+            # Try to set binary_location sensibly for ubuntu runners
+            if os.path.exists("/usr/bin/chromium-browser"):
+                options.binary_location = "/usr/bin/chromium-browser"
+            elif os.path.exists("/usr/bin/chromium"):
+                options.binary_location = "/usr/bin/chromium"
+            # headless & CI-friendly flags
+            options.add_argument("--headless=new")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--window-size=1920,1080")
+            # Use system chromedriver path (installed on the runner)
+            service = ChromeService(executable_path="/usr/bin/chromedriver")
+        else:
+            # Local dev: allow using local Chrome profile, webdriver-manager for chromedriver
             ud = os.getenv("CHROME_USER_DATA")
             pd = os.getenv("CHROME_PROFILE_DIR")
             if ud:
                 options.add_argument(f"--user-data-dir={ud}")
             if pd:
                 options.add_argument(f"--profile-directory={pd}")
-            # keep window visible so you can solve captcha manually
-        else:
-            # CI environment (GitHub Actions) - use headless + CI flags
-            # 'headless=new' works for modern Chrome. If runner has older Chrome, change to '--headless'
-            options.add_argument("--headless=new")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-gpu")
-            options.add_argument("--window-size=1920,1080")
+            # do not start headless locally so you can manually solve captchas
+            service = ChromeService(ChromeDriverManager().install())
 
-        # Use webdriver-manager to ensure matching chromedriver in CI and local
-        service = ChromeService(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
 
     # ---------- FIREFOX ----------
@@ -263,16 +267,14 @@ def setup_driver(request):
         options = FirefoxOptions()
         options.set_preference("dom.webdriver.enabled", False)
         options.set_preference("useAutomationExtension", False)
-        # Add headless in CI automatically
-        if os.getenv("CI") or os.getenv("GITHUB_ACTIONS"):
+        if _is_ci():
             options.add_argument("--headless")
         driver = webdriver.Firefox(options=options)
 
     # ---------- EDGE ----------
     elif browser == "edge":
         options = EdgeOptions()
-        # Edge in CI might need headless - only set if running in CI
-        if os.getenv("CI") or os.getenv("GITHUB_ACTIONS"):
+        if _is_ci():
             options.add_argument("--headless=new")
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
@@ -284,7 +286,6 @@ def setup_driver(request):
     else:
         raise ValueError(f"Browser '{browser}' is not supported. Use chrome | firefox | edge.")
 
-    # comfortable window for local debugging (best-effort)
     try:
         driver.maximize_window()
     except Exception:
@@ -292,7 +293,7 @@ def setup_driver(request):
 
     yield driver
 
-    # TEARDOWN: attach screenshot on failure (robust if session already closed)
+    # TEARDOWN: attach screenshot if the test failed (best-effort)
     try:
         if getattr(request.node, "rep_call", None) and request.node.rep_call.failed:
             try:
@@ -303,8 +304,8 @@ def setup_driver(request):
                     png = None
                 if png:
                     allure.attach(png, name="screenshot_on_failure", attachment_type=allure.attachment_type.PNG)
-            except Exception as e:
-                print("teardown: could not attach screenshot:", e)
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -313,10 +314,8 @@ def setup_driver(request):
     except Exception:
         pass
 
-
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """Hook to capture test result for screenshot on failure - stores rep on item"""
     outcome = yield
     rep = outcome.get_result()
     setattr(item, "rep_" + rep.when, rep)
